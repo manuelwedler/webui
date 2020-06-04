@@ -21,11 +21,11 @@
                 fxLayoutAlign="start end"
                 fxLayoutGap="10px"
             >
-                <span>Page {{ currentPage + 1 }} of {{ numberOfPages }}</span>
+                <span>Page {{ currentPage }} of {{ numberOfPages }}</span>
                 <button
                     class="navigation"
                     mat-icon-button
-                    [disabled]="currentPage <= 0"
+                    [disabled]="currentPage <= 1"
                     (click)="previousPage()"
                     id="previous"
                 >
@@ -39,7 +39,7 @@
                 <button
                     class="navigation"
                     mat-icon-button
-                    [disabled]="currentPage + 1 >= numberOfPages"
+                    [disabled]="currentPage >= numberOfPages"
                     (click)="nextPage()"
                     id="next"
                 >

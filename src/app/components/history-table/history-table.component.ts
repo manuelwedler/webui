@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, Input } from '@angular/core';
 import { PaymentHistoryPollingService } from '../../services/payment-history-polling.service';
-import { Subject, combineLatest } from 'rxjs';
+import { Subject, combineLatest, Subscription } from 'rxjs';
 import { PaymentEvent } from '../../models/payment-event';
 import { AddressBookService } from '../../services/address-book.service';
 import { Animations } from '../../animations/animations';
@@ -9,7 +9,7 @@ import { UserToken } from '../../models/usertoken';
 import { SharedService } from '../../services/shared.service';
 import { matchesToken, matchesContact } from '../../shared/keyword-matcher';
 import { Contact } from '../../models/contact';
-import { takeUntil, map } from 'rxjs/operators';
+import { takeUntil, map, filter, tap } from 'rxjs/operators';
 import { PendingTransferPollingService } from '../../services/pending-transfer-polling.service';
 import { RaidenService } from '../../services/raiden.service';
 
@@ -28,13 +28,18 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
 
     @Input() showAll = false;
 
-    visibleHistory: HistoryEvent[] = [];
+    visibleHistory: HistoryEvent[] = [];//todo rename
     selectedToken: UserToken;
-    currentPage = 0;
-    numberOfPages = 0;
+    currentPage = 1;
 
-    private history: HistoryEvent[] = [];
+    // private history: HistoryEvent[] = [];
     private searchFilter = '';
+    private readonly historySubject: Subject<HistoryEvent[]> = new Subject();
+    private historyPollingSubscription: Subscription;
+    private totalNumberOfEvents = 0;
+    private numberOfPendingEvents = 0;
+    private numberOfFilteredEvents = 0;
+    private loaded = false;
     private ngUnsubscribe = new Subject();
 
     constructor(
@@ -46,55 +51,118 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
         private raidenService: RaidenService
     ) {}
 
+    get numberOfPages(): number {
+        return Math.ceil(
+            (this.totalNumberOfEvents + this.numberOfPendingEvents) /
+                HistoryTableComponent.ITEMS_PER_PAGE
+        );
+    }
+
     ngOnInit() {
-        combineLatest([
-            this.paymentHistoryPollingService.getHistory(),
-            this.pendingTransferPollingService.pendingTransfers$,
-        ])
+        this.paymentHistoryPollingService.newPaymentEvents$
+            .pipe(takeUntil(this.ngUnsubscribe))
+            .subscribe((events) => {
+                if (!this.loaded || events.length !== 0) {
+                    this.totalNumberOfEvents = this.paymentHistoryPollingService.totalNumberOfEvents;
+                    this.updateHistoryPolling();
+                }
+                this.loaded = true;
+            });
+
+        const pendingEvents$ = this.pendingTransferPollingService.pendingTransfers$.pipe(
+            map((pendingTransfers) =>
+                pendingTransfers
+                    .map((pendingTransfer) => {
+                        const initiator = pendingTransfer.role === 'initiator';
+                        const event: HistoryEvent = {
+                            target: pendingTransfer.target,
+                            initiator: pendingTransfer.initiator,
+                            event: initiator
+                                ? 'EventPaymentSentSuccess'
+                                : 'EventPaymentReceivedSuccess',
+                            amount: pendingTransfer.locked_amount,
+                            identifier: pendingTransfer.payment_identifier,
+                            log_time: '',
+                            token_address: pendingTransfer.token_address,
+                            pending: true,
+                        };
+                        return event;
+                    })
+                    .reverse()
+            ),
+            tap((pendingEvents) => {
+                if (this.numberOfPendingEvents !== pendingEvents.length) {
+                    this.numberOfPendingEvents = pendingEvents.length;
+                    this.updateHistoryPolling();
+                }
+            }),
+            map((pendingEvents) => {
+                const start =
+                    HistoryTableComponent.ITEMS_PER_PAGE *
+                    (this.currentPage - 1);
+                const end = start + HistoryTableComponent.ITEMS_PER_PAGE;
+                return pendingEvents.slice(start, end);
+            })
+        );
+
+        const history$ = this.historySubject.pipe(
+            map((events) => events.reverse())
+        );
+
+        combineLatest([history$, pendingEvents$])
             .pipe(
-                map(([paymentEvents, pendingTransfers]) => {
-                    const pendingEvents: HistoryEvent[] = pendingTransfers.map(
-                        (pendingTransfer) => {
-                            const initiator =
-                                pendingTransfer.role === 'initiator';
-                            const event: HistoryEvent = {
-                                target: pendingTransfer.target,
-                                initiator: pendingTransfer.initiator,
-                                event: initiator
-                                    ? 'EventPaymentSentSuccess'
-                                    : 'EventPaymentReceivedSuccess',
-                                amount: pendingTransfer.locked_amount,
-                                identifier: pendingTransfer.payment_identifier,
-                                log_time: '',
-                                token_address: pendingTransfer.token_address,
-                                pending: true,
-                            };
-                            return event;
-                        }
-                    );
-                    return paymentEvents.concat(pendingEvents);
+                map(
+                    ([paymentEvents, pendingEvents]) =>
+                        pendingEvents.concat(paymentEvents)
+                ), 
+                // filter((history) => {
+                //     const filteredHistory = this.getFilteredEvents(history);
+                //     const enoughEvents =
+                //         filteredHistory.length <=
+                //         HistoryTableComponent.ITEMS_PER_PAGE;
+                //     if (
+                //         filteredHistory.length <
+                //         HistoryTableComponent.ITEMS_PER_PAGE
+                //     ) {
+                //         const missing =
+                //             HistoryTableComponent.ITEMS_PER_PAGE -
+                //             filteredHistory.length;
+                //     }
+                // }),
+                filter((events) => events.length <= HistoryTableComponent.ITEMS_PER_PAGE),//maybe a problem with filter
+                map((events) => {
+                    const filteredEvents = this.getFilteredEvents(events);
+                    console.log(events.length, filteredEvents.length)
+                    if (filteredEvents.length < HistoryTableComponent.ITEMS_PER_PAGE) {//todo what if on last page
+                        this.numberOfFilteredEvents += events.length - filteredEvents.length;
+                        this.updateHistoryPolling();
+                        return undefined;
+                    }
+                    return filteredEvents;
                 }),
+                filter((events) => events !== undefined),
                 takeUntil(this.ngUnsubscribe)
             )
             .subscribe((events) => {
-                this.history = events;
-                this.updateVisibleEvents();
+                this.visibleHistory = events;
             });
 
         this.selectedTokenService.selectedToken$
             .pipe(takeUntil(this.ngUnsubscribe))
             .subscribe((token: UserToken) => {
+                this.numberOfFilteredEvents = 0;
                 this.selectedToken = token;
-                this.currentPage = 0;
-                this.updateVisibleEvents();
+                this.currentPage = 1;
+                this.updateHistoryPolling();
             });
 
         this.sharedService.searchFilter$
             .pipe(takeUntil(this.ngUnsubscribe))
             .subscribe((value) => {
+                this.numberOfFilteredEvents = 0;
                 this.searchFilter = value;
-                this.currentPage = 0;
-                this.updateVisibleEvents();
+                this.currentPage = 1;
+                this.updateHistoryPolling();
             });
     }
 
@@ -108,19 +176,19 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
     }
 
     nextPage() {
-        if (this.currentPage + 1 >= this.numberOfPages) {
+        if (this.currentPage >= this.numberOfPages) {
             return;
         }
         this.currentPage += 1;
-        this.updateVisibleEvents();
+        this.updateHistoryPolling();
     }
 
     previousPage() {
-        if (this.currentPage <= 0) {
+        if (this.currentPage <= 1) {
             return;
         }
         this.currentPage -= 1;
-        this.updateVisibleEvents();
+        this.updateHistoryPolling();
     }
 
     paymentPartner(event: HistoryEvent): string {
@@ -151,27 +219,27 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
         return this.addressBookService.get()[address];
     }
 
-    private updateVisibleEvents() {
-        const filteredEvents = this.getFilteredEvents();
-        this.numberOfPages = Math.ceil(
-            filteredEvents.length / HistoryTableComponent.ITEMS_PER_PAGE
-        );
+    // private updateVisibleEvents() {
+    //     // how to get number of pages
+    //     const filteredEvents = this.getFilteredEvents();
+    //     this.numberOfPages = Math.ceil(
+    //         filteredEvents.length / HistoryTableComponent.ITEMS_PER_PAGE
+    //     );
 
-        const visibleEvents: HistoryEvent[] = [];
-        const start = this.currentPage * HistoryTableComponent.ITEMS_PER_PAGE;
-        for (let i = filteredEvents.length - 1 - start; i >= 0; i--) {
-            if (visibleEvents.length >= HistoryTableComponent.ITEMS_PER_PAGE) {
-                break;
-            }
-            visibleEvents.push(filteredEvents[i]);
-        }
-        this.visibleHistory = visibleEvents;
-    }
+    //     const visibleEvents: HistoryEvent[] = [];
+    //     const start = this.currentPage * HistoryTableComponent.ITEMS_PER_PAGE;
+    //     for (let i = filteredEvents.length - 1 - start; i >= 0; i--) {
+    //         if (visibleEvents.length >= HistoryTableComponent.ITEMS_PER_PAGE) {
+    //             break;
+    //         }
+    //         visibleEvents.push(filteredEvents[i]);
+    //     }
+    //     this.visibleHistory = visibleEvents;
+    // } // mucho todo
 
-    private getFilteredEvents() {
-        return this.history.filter(
+    private getFilteredEvents(events: HistoryEvent[]) {
+        return events.filter(
             (event) =>
-                event.event !== 'EventPaymentSentFailed' &&
                 this.matchesSearchFilter(event) &&
                 !(
                     this.selectedToken &&
@@ -209,5 +277,25 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
             matchingToken ||
             matchingContact
         );
+    }
+
+    private updateHistoryPolling() {
+        const offset =
+            this.totalNumberOfEvents +
+            this.numberOfPendingEvents -
+            this.currentPage * HistoryTableComponent.ITEMS_PER_PAGE;
+        let limit = HistoryTableComponent.ITEMS_PER_PAGE + this.numberOfFilteredEvents;
+        if (offset < 0) {
+            limit += offset;
+        }
+        console.log('pollpage', limit, offset);
+
+        if (this.historyPollingSubscription) {
+            this.historyPollingSubscription.unsubscribe();
+        }
+        this.historyPollingSubscription = this.paymentHistoryPollingService
+            .getHistory(undefined, undefined, Math.max(0, limit), Math.max(0, offset))
+            .pipe(takeUntil(this.ngUnsubscribe))
+            .subscribe(this.historySubject);
     }
 }

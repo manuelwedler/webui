@@ -15,11 +15,11 @@ import { AddressBookService } from './address-book.service';
 })
 export class PaymentHistoryPollingService {
     readonly newPaymentEvents$: Observable<PaymentEvent[]>;
+    totalNumberOfEvents = 0;
 
     private readonly paymentHistorySubject: BehaviorSubject<
         void
     > = new BehaviorSubject(null);
-    private queryOffset = 0;
     private loaded = false;
     private tokenUsage: { [tokenAddress: string]: number } = {};
     private paymentTargetUsage: { [targetAddress: string]: number } = {};
@@ -31,7 +31,7 @@ export class PaymentHistoryPollingService {
         private addressBookService: AddressBookService
     ) {
         this.raidenService.reconnected$.subscribe(() => {
-            this.queryOffset = 0;
+            this.totalNumberOfEvents = 0;
             this.loaded = false;
             this.refresh();
         });
@@ -46,7 +46,7 @@ export class PaymentHistoryPollingService {
                     undefined,
                     undefined,
                     undefined,
-                    this.queryOffset
+                    this.totalNumberOfEvents
                 )
             ),
             tap((newEvents: PaymentEvent[]) => {
@@ -103,7 +103,7 @@ export class PaymentHistoryPollingService {
                 this.updateUsageInformation(event);
             }
         });
-        this.queryOffset += events.length;
+        this.totalNumberOfEvents += events.length;
         this.loaded = true;
     }
 
