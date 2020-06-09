@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, Input } from '@angular/core';
 import { PaymentHistoryPollingService } from '../../services/payment-history-polling.service';
-import { Subject, combineLatest } from 'rxjs';
+import { Subject, combineLatest, Subscription } from 'rxjs';
 import { PaymentEvent } from '../../models/payment-event';
 import { AddressBookService } from '../../services/address-book.service';
 import { Animations } from '../../animations/animations';
@@ -34,6 +34,8 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
     numberOfPages = 0;
 
     private history: HistoryEvent[] = [];
+    private readonly historySubject: Subject<HistoryEvent[]> = new Subject();
+    private historyPollingSubscription: Subscription;
     private searchFilter = '';
     private ngUnsubscribe = new Subject();
 
@@ -48,7 +50,7 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
 
     ngOnInit() {
         combineLatest([
-            this.paymentHistoryPollingService.getHistory(),
+            this.historySubject,
             this.pendingTransferPollingService.pendingTransfers$,
         ])
             .pipe(
@@ -96,6 +98,8 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
                 this.currentPage = 0;
                 this.updateVisibleEvents();
             });
+
+        this.historyPollingSubscription = thi
     }
 
     ngOnDestroy() {
@@ -171,7 +175,6 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
     private getFilteredEvents() {
         return this.history.filter(
             (event) =>
-                event.event !== 'EventPaymentSentFailed' &&
                 this.matchesSearchFilter(event) &&
                 !(
                     this.selectedToken &&
@@ -197,7 +200,7 @@ export class HistoryTableComponent implements OnInit, OnDestroy {
                 address: partnerAddress,
                 label: partnerLabel,
             };
-            matchingContact = matchesContact(this.searchFilter, contact);
+            matchingContact = matchesContact(this.searchFilter, contact);// i don't need this func as I can just compare the partnerLabel
         }
 
         const partner = partnerAddress.toLocaleLowerCase();

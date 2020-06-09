@@ -60,6 +60,7 @@ import { ChannelsPageComponent } from './components/channels-page/channels-page.
 import { ContactsPageComponent } from './components/contacts-page/contacts-page.component';
 import { TransfersPageComponent } from './components/transfers-page/transfers-page.component';
 import { ChunkPipe } from './pipes/chunk.pipe';
+import { SessionStorageAdapter } from './adapters/session-storage-adapter';
 
 const appRoutes: Routes = [
     { path: '', redirectTo: '/home', pathMatch: 'full' },
@@ -173,6 +174,7 @@ export function ConfigLoader(raidenConfig: RaidenConfig) {
             provide: ErrorStateMatcher,
             useClass: ShowOnDirtyErrorStateMatcher,
         },
+        SessionStorageAdapter
     ],
     bootstrap: [AppComponent],
 })

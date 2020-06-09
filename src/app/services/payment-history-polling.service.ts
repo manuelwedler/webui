@@ -9,15 +9,22 @@ import { NotificationService } from './notification.service';
 import { UiMessage } from '../models/notification';
 import { amountToDecimal } from '../utils/amount.converter';
 import { AddressBookService } from './address-book.service';
+import { SessionStorageAdapter } from '../adapters/session-storage-adapter';
 
 @Injectable({
     providedIn: 'root',
 })
 export class PaymentHistoryPollingService {
+    private static PAYMENT_HISTORY_KEY = 'raiden__payment_history';
+
     readonly newPaymentEvents$: Observable<PaymentEvent[]>;
 
     private readonly paymentHistorySubject: BehaviorSubject<
         void
+    > = new BehaviorSubject(null);
+    private storage: Storage;
+    private readonly storageUpdate: BehaviorSubject<
+        string
     > = new BehaviorSubject(null);
     private queryOffset = 0;
     private loaded = false;
@@ -28,11 +35,14 @@ export class PaymentHistoryPollingService {
         private raidenService: RaidenService,
         private notificationService: NotificationService,
         private raidenConfig: RaidenConfig,
-        private addressBookService: AddressBookService
+        private addressBookService: AddressBookService,
+        sessionStorageAdapter: SessionStorageAdapter
     ) {
+        this.storage = sessionStorageAdapter.sessionStorage;
+
         this.raidenService.reconnected$.subscribe(() => {
             this.queryOffset = 0;
-            this.loaded = false;
+            this.loaded = false;// clear session! also emits on init??
             this.refresh();
         });
 
@@ -73,18 +83,9 @@ export class PaymentHistoryPollingService {
         tokenAddress?: string,
         partnerAddress?: string,
         limit?: number,
-        offset?: number
+        offset?: number// keep limit and offset
     ): Observable<PaymentEvent[]> {
-        return this.paymentHistorySubject.pipe(
-            switchMap(() =>
-                this.raidenService.getPaymentHistory(
-                    tokenAddress,
-                    partnerAddress,
-                    limit,
-                    offset
-                )
-            )
-        );
+
     }
 
     getTokenUsage(tokenAddress: string): number {
@@ -135,5 +136,10 @@ export class PaymentHistoryPollingService {
         } else {
             this.paymentTargetUsage[event.target] += 1;
         }
+    }
+
+    private getStoredEvents(): PaymentEvent[] {
+        const uparsedEvents: string = this.storage.getItem(PaymentHistoryPollingService.PAYMENT_HISTORY_KEY);
+        
     }
 }
