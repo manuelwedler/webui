@@ -21,11 +21,14 @@
                 fxLayoutAlign="start end"
                 fxLayoutGap="10px"
             >
-                <span>Page {{ currentPage + 1 }} of {{ numberOfPages }}</span>
+                <span>
+                    Page {{ currentPage }} 
+                    <ng-container *ngIf="!filterActive()">of {{ numberOfPages }}</ng-container>
+                </span>
                 <button
                     class="navigation"
                     mat-icon-button
-                    [disabled]="currentPage <= 0"
+                    [disabled]="currentPage <= 1"
                     (click)="previousPage()"
                     id="previous"
                 >
@@ -39,7 +42,7 @@
                 <button
                     class="navigation"
                     mat-icon-button
-                    [disabled]="currentPage + 1 >= numberOfPages"
+                    [disabled]="onLastPage"
                     (click)="nextPage()"
                     id="next"
                 >
