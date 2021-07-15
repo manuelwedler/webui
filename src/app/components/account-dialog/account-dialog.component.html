@@ -1,0 +1,57 @@
+<app-raiden-dialog
+    acceptText="Done"
+    infoText="You can use this dialog to fill up your account with ETH or tokens from a wallet."
+    [showCancel]="false"
+    [formGroup]="form"
+    (accept)="close()"
+    (cancel)="close()"
+>
+    <div class="info" fxLayout="column" fxLayoutAlign="start center">
+        <app-token-network-selector
+            formControlName="token"
+            [showOnChainBalance]="true"
+        ></app-token-network-selector>
+        <div fxLayout="row" fxLayoutGap="8px" fxLayoutAlign="center center">
+            <app-balance-with-symbol
+                *ngIf="token"
+                class="info__balance"
+                [balance]="balance$ | async"
+                [token]="token"
+                [maxBalanceWidth]="200"
+            ></app-balance-with-symbol>
+            <!-- <span
+                *ngIf="zeroBalance$ | async"
+                class="info__alert"
+                fxLayoutAlign="center center"
+            >
+                <mat-icon
+                    svgIcon="down-arrow"
+                    aria-label="Funds needed"
+                    class="info__icon"
+                    matTooltip="Funds needed"
+                ></mat-icon>
+            </span> -->
+            <a
+                *ngIf="(network$ | async)?.faucet"
+                [href]="faucetLink$ | async"
+                target="_blank"
+                mat-icon-button
+                class="account-button"
+                matTooltip="Open ether faucet"
+                fxLayout="column"
+                fxLayoutAlign="center center"
+                fxFlexAlign="center"
+                id="faucet-button"
+            >
+                <mat-icon
+                    class="account-button__icon-faucet"
+                    svgIcon="faucet"
+                    aria-label="Open ether faucet"
+                >
+                </mat-icon>
+            </a>
+        </div>
+        <span class="info__label info__label--big"> On-chain balance </span>
+        <app-token-input formControlName="amount"></app-token-input>
+    </div>
+</app-raiden-dialog>

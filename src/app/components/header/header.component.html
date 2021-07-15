@@ -42,21 +42,24 @@
                     <span class="header__balance header__balance--uppercase">
                         {{ (network$ | async)?.shortName }}
                     </span>
-                    <span
+                    <button
                         *ngIf="zeroBalance$ | async"
-                        class="alert"
+                        class="small-balance-button small-balance-button--alert"
+                        mat-icon-button
+                        matTooltip="Funds needed"
                         fxLayout="column"
                         fxLayoutAlign="center center"
                         fxFlexOffset="6px"
+                        (click)="openAccountDialog()"
+                        id="balance-alert"
                     >
                         <mat-icon
+                            class="small-balance-button__icon"
                             svgIcon="down-arrow"
-                            aria-hidden="true"
-                            class="alert__icon"
-                            matTooltip="Funds needed"
-                            id="balance-alert"
-                        ></mat-icon>
-                    </span>
+                            aria-label="Funds needed"
+                        >
+                        </mat-icon>
+                    </button>
                 </span>
                 <span class="header__label">On-Chain</span>
             </div>
@@ -190,6 +193,7 @@
                 mat-icon-button
                 class="balances-button"
                 matTooltip="Fill up your account"
+                (click)="openAccountDialog()"
             >
                 <mat-icon
                     class="balances-button__icon"

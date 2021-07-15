@@ -24,6 +24,7 @@ import { SharedService } from '../../services/shared.service';
 import { SelectedTokenService } from 'app/services/selected-token.service';
 import { UserDepositDialogComponent } from '../user-deposit-dialog/user-deposit-dialog.component';
 import { getMintAmount } from 'app/shared/mint-amount';
+import { AccountDialogComponent } from '../account-dialog/account-dialog.component';
 
 @Component({
     selector: 'app-header',
@@ -153,6 +154,11 @@ export class HeaderComponent implements OnInit, OnDestroy {
     openUdcDialog() {
         this.dialog.open(UserDepositDialogComponent, {
             width: '509px',
+        });
+    }
+
+    openAccountDialog() {
+        this.dialog.open(AccountDialogComponent, {
         });
     }
 
